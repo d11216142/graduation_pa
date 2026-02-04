@@ -158,7 +158,8 @@
             // 收集其他欄位
             const otherFields = [];
             const fieldNames = ['update', 'edition', 'language', 'sw_edition', 'target_sw', 'target_hw', 'other'];
-            for (let i = 4; i < parts.length && i < 11; i++) {
+            const maxFields = Math.min(parts.length, fieldNames.length + 4);
+            for (let i = 4; i < maxFields; i++) {
                 if (parts[i] && parts[i] !== '*' && parts[i] !== '-') {
                     otherFields.push(`${fieldNames[i-4]}:${parts[i]}`);
                 }
@@ -419,12 +420,22 @@
                 return;
             }
             
+            // 轉義CSV欄位中的雙引號
+            function escapeCSV(field) {
+                if (field == null) return '';
+                const str = String(field);
+                if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+                    return '"' + str.replace(/"/g, '""') + '"';
+                }
+                return '"' + str + '"';
+            }
+            
             // 建立CSV標頭
             let csv = '編號,類別,供應商,產品名稱,版本,安裝時間,安裝位置,大小(MB),其他欄位\n';
             
             // 加入資料
             allCpeData.forEach((item, index) => {
-                csv += `${index + 1},"${item.category}","${item.vendor}","${item.product}","${item.version}","${item.date}","${item.location}",${item.size},"${item.other}"\n`;
+                csv += `${index + 1},${escapeCSV(item.category)},${escapeCSV(item.vendor)},${escapeCSV(item.product)},${escapeCSV(item.version)},${escapeCSV(item.date)},${escapeCSV(item.location)},${item.size},${escapeCSV(item.other)}\n`;
             });
             
             // 建立下載連結
