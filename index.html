@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>隨機生成50筆CPE資料</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .loading {
+            text-align: center;
+            font-size: 18px;
+            color: #666;
+            padding: 40px;
+        }
+        .error {
+            color: #d32f2f;
+            padding: 20px;
+            background-color: #ffebee;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .category-o { color: #2196F3; }
+        .category-a { color: #FF9800; }
+        .category-h { color: #9C27B0; }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 20px auto;
+            display: block;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .info {
+            text-align: center;
+            color: #666;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>隨機生成50筆CPE資料</h1>
+        <p class="info">從NVD資料庫隨機抓取CPE編號，並模擬日期、位置、大小等資訊</p>
+        
+        <button id="generateBtn" onclick="generateData()">生成資料</button>
+        
+        <div id="loading" class="loading" style="display: none;">
+            正在載入資料...
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="tableContainer"></div>
+    </div>
+
+    <script>
+        let allCpeData = [];
+        
+        // 模擬的位置列表
+        const locations = [
+            '台北', '新北', '桃園', '台中', '台南', '高雄', 
+            '新竹', '基隆', '嘉義', '台東', '花蓮', '宜蘭',
+            '彰化', '雲林', '苗栗', '南投', '屏東', '澎湖'
+        ];
+        
+        // 生成隨機日期
+        function randomDate(start, end) {
+            const date = new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+            return date.toISOString().split('T')[0];
+        }
+        
+        // 生成隨機大小 (MB)
+        function randomSize() {
+            return (Math.random() * 1000 + 1).toFixed(2);
+        }
+        
+        // 隨機選擇位置
+        function randomLocation() {
+            return locations[Math.floor(Math.random() * locations.length)];
+        }
+        
+        // 解析CPE字串
+        function parseCPE(cpeUri) {
+            // CPE格式: cpe:2.3:part:vendor:product:version:update:edition:language:sw_edition:target_sw:target_hw:other
+            // 或 cpe:/part:vendor:product:version:update:edition:language
+            
+            let parts;
+            if (cpeUri.startsWith('cpe:2.3:')) {
+                parts = cpeUri.substring(8).split(':');
+            } else if (cpeUri.startsWith('cpe:/')) {
+                parts = cpeUri.substring(5).split(':');
+            } else {
+                return null;
+            }
+            
+            const categoryMap = {
+                'o': 'o (作業系統)',
+                'a': 'a (應用程式)',
+                'h': 'h (硬體)'
+            };
+            
+            return {
+                category: categoryMap[parts[0]] || parts[0],
+                vendor: parts[1] === '*' ? 'N/A' : parts[1],
+                product: parts[2] === '*' ? 'N/A' : parts[2],
+                version: parts[3] === '*' ? 'N/A' : parts[3]
+            };
+        }
+        
+        // 從NVD API獲取CPE資料
+        async function fetchCPEData() {
+            try {
+                // 使用NVD API v2獲取CPE資料
+                // 由於API限制，我們需要多次請求來獲取足夠的資料
+                const response = await fetch('https://services.nvd.nist.gov/rest/json/cpes/2.0?resultsPerPage=100');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data.products || [];
+            } catch (error) {
+                console.error('Error fetching CPE data:', error);
+                throw error;
+            }
+        }
+        
+        // 生成資料
+        async function generateData() {
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            const tableContainer = document.getElementById('tableContainer');
+            const generateBtn = document.getElementById('generateBtn');
+            
+            // 重置顯示
+            loadingDiv.style.display = 'block';
+            errorDiv.style.display = 'none';
+            tableContainer.innerHTML = '';
+            generateBtn.disabled = true;
+            
+            try {
+                // 獲取CPE資料
+                const cpeProducts = await fetchCPEData();
+                
+                if (!cpeProducts || cpeProducts.length === 0) {
+                    throw new Error('無法獲取CPE資料');
+                }
+                
+                // 隨機選擇50個CPE
+                const shuffled = cpeProducts.sort(() => 0.5 - Math.random());
+                const selected = shuffled.slice(0, Math.min(50, cpeProducts.length));
+                
+                // 處理資料
+                const processedData = [];
+                const startDate = new Date('2023-01-01');
+                const endDate = new Date();
+                
+                for (const product of selected) {
+                    const cpeUri = product.cpe?.cpeName || product.cpe?.cpe23Uri;
+                    if (!cpeUri) continue;
+                    
+                    const parsed = parseCPE(cpeUri);
+                    if (!parsed) continue;
+                    
+                    processedData.push({
+                        ...parsed,
+                        date: randomDate(startDate, endDate),
+                        location: randomLocation(),
+                        size: randomSize(),
+                        cpe: cpeUri
+                    });
+                }
+                
+                // 確保有50筆資料
+                while (processedData.length < 50 && processedData.length > 0) {
+                    const template = processedData[Math.floor(Math.random() * processedData.length)];
+                    processedData.push({
+                        ...template,
+                        date: randomDate(startDate, endDate),
+                        location: randomLocation(),
+                        size: randomSize()
+                    });
+                }
+                
+                allCpeData = processedData.slice(0, 50);
+                
+                // 顯示資料
+                displayData(allCpeData);
+                
+            } catch (error) {
+                console.error('Error generating data:', error);
+                errorDiv.textContent = `錯誤: ${error.message}。由於NVD API限制，將生成模擬資料。`;
+                errorDiv.style.display = 'block';
+                
+                // 生成模擬資料作為備案
+                generateMockData();
+            } finally {
+                loadingDiv.style.display = 'none';
+                generateBtn.disabled = false;
+            }
+        }
+        
+        // 生成模擬資料（當API無法訪問時使用）
+        function generateMockData() {
+            const vendors = ['microsoft', 'apple', 'google', 'linux', 'oracle', 'adobe', 'cisco', 'ibm', 'redhat', 'ubuntu'];
+            const products = ['windows', 'office', 'chrome', 'firefox', 'linux_kernel', 'android', 'ios', 'macos', 'mysql', 'apache'];
+            const versions = ['1.0', '2.0', '3.0', '10.0', '11.0', '2023.1', '2024.1', '8.0', '9.0', '7.5'];
+            const categories = ['o (作業系統)', 'a (應用程式)', 'h (硬體)'];
+            
+            const mockData = [];
+            const startDate = new Date('2023-01-01');
+            const endDate = new Date();
+            
+            for (let i = 0; i < 50; i++) {
+                const vendor = vendors[Math.floor(Math.random() * vendors.length)];
+                const product = products[Math.floor(Math.random() * products.length)];
+                const version = versions[Math.floor(Math.random() * versions.length)];
+                const category = categories[Math.floor(Math.random() * categories.length)];
+                const categoryChar = category.charAt(0);
+                
+                mockData.push({
+                    category: category,
+                    vendor: vendor,
+                    product: product,
+                    version: version,
+                    date: randomDate(startDate, endDate),
+                    location: randomLocation(),
+                    size: randomSize(),
+                    cpe: `cpe:2.3:${categoryChar}:${vendor}:${product}:${version}:*:*:*:*:*:*:*`
+                });
+            }
+            
+            allCpeData = mockData;
+            displayData(allCpeData);
+        }
+        
+        // 顯示資料表格
+        function displayData(data) {
+            const tableContainer = document.getElementById('tableContainer');
+            
+            if (data.length === 0) {
+                tableContainer.innerHTML = '<p class="info">沒有資料可顯示</p>';
+                return;
+            }
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>編號</th>
+                            <th>類別</th>
+                            <th>供應商</th>
+                            <th>產品名稱</th>
+                            <th>版本</th>
+                            <th>日期</th>
+                            <th>位置</th>
+                            <th>大小 (MB)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            data.forEach((item, index) => {
+                const categoryClass = 'category-' + item.category.charAt(0);
+                html += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td class="${categoryClass}">${item.category}</td>
+                        <td>${item.vendor}</td>
+                        <td>${item.product}</td>
+                        <td>${item.version}</td>
+                        <td>${item.date}</td>
+                        <td>${item.location}</td>
+                        <td>${item.size}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                    </tbody>
+                </table>
+            `;
+            
+            tableContainer.innerHTML = html;
+        }
+        
+        // 頁面載入時自動生成資料
+        window.addEventListener('DOMContentLoaded', () => {
+            generateData();
+        });
+    </script>
+</body>
+</html>
