@@ -191,14 +191,18 @@
                     throw new Error('無法獲取CPE資料');
                 }
                 
-                // 隨機選擇50個CPE
-                const shuffled = cpeProducts.sort(() => 0.5 - Math.random());
+                // 使用 Fisher-Yates 演算法隨機選擇50個CPE
+                const shuffled = [...cpeProducts];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
                 const selected = shuffled.slice(0, Math.min(50, cpeProducts.length));
                 
                 // 處理資料
                 const processedData = [];
-                const startDate = new Date('2023-01-01');
                 const endDate = new Date();
+                const startDate = new Date(endDate.getFullYear() - 2, 0, 1); // 兩年前
                 
                 for (const product of selected) {
                     const cpeUri = product.cpe?.cpeName || product.cpe?.cpe23Uri;
@@ -234,7 +238,7 @@
                 
             } catch (error) {
                 console.error('Error generating data:', error);
-                errorDiv.textContent = `錯誤: ${error.message}。由於NVD API限制，將生成模擬資料。`;
+                errorDiv.textContent = `錯誤: ${error.message}。將使用模擬資料代替。`;
                 errorDiv.style.display = 'block';
                 
                 // 生成模擬資料作為備案
@@ -253,8 +257,8 @@
             const categories = ['o (作業系統)', 'a (應用程式)', 'h (硬體)'];
             
             const mockData = [];
-            const startDate = new Date('2023-01-01');
             const endDate = new Date();
+            const startDate = new Date(endDate.getFullYear() - 2, 0, 1); // 兩年前
             
             for (let i = 0; i < 50; i++) {
                 const vendor = vendors[Math.floor(Math.random() * vendors.length)];
